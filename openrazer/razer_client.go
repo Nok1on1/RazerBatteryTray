@@ -1,12 +1,13 @@
 package openrazer
 
 import (
-	"github.com/Nok1on1/RazerBatteryTray/utils"
 	"errors"
-	"fmt"
 	"log"
 	"reflect"
+	"slices"
 	"strings"
+
+	"github.com/Nok1on1/RazerBatteryTray/utils"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -17,9 +18,11 @@ type Client struct {
 	DeviceDbus DbusDeviceMethods
 }
 
-type device struct {
-	DeviceName   string
-	DeviceSerial string
+type Device struct {
+	DeviceName        string
+	DeviceSerial      string
+	LastBatteryLevel  int8
+	LastchargingState bool
 }
 
 func NewClient() (*Client, error) {
@@ -51,14 +54,14 @@ func (c *Client) call(method utils.RazerMethod, out any, args ...any) error {
 	return nil
 }
 
-func (c *Client) GetDeviceDisplayNames() (devices []device, err error) {
+func (c *Client) GetDevices() (devices []Device, err error) {
 	var deviceSerials []string
 	err = c.call(c.rootDbus.GetDevices(), &deviceSerials)
 	if err != nil {
 		return
 	}
 
-	devices = make([]device, len(deviceSerials))
+	devices = make([]Device, len(deviceSerials))
 	for i, v := range deviceSerials {
 		devices[i].DeviceSerial = v
 	}
@@ -74,25 +77,26 @@ func (c *Client) GetDeviceDisplayNames() (devices []device, err error) {
 	return
 }
 
-func (c *Client) SelectDevice(deviceName string) (err error) {
-	devicesInfo, err := c.GetDeviceDisplayNames()
+func (c *Client) SelectDevice(deviceName string) (device Device, err error) {
+	devices, err := c.GetDevices()
 	if err != nil {
 		log.Println("error getting devices:", err)
-		return err
+		return
 	}
 
 	deviceName = strings.ToLower(deviceName)
-	for _, deviceInfo := range devicesInfo {
-		if strings.Contains(strings.ToLower(deviceInfo.DeviceName), deviceName) {
-			log.Println("device found:", deviceInfo.DeviceName)
-			c.DeviceDbus = NewDevice(deviceInfo.DeviceSerial)
+	for _, device = range slices.Backward(devices) {
+		if strings.Contains(strings.ToLower(device.DeviceName), deviceName) {
+			log.Println("device found:", device.DeviceName)
+			c.DeviceDbus = NewDevice(device.DeviceSerial)
+			device.LastBatteryLevel = -1
 			return
 		}
 	}
 
 	c.DeviceDbus = NewDevice("")
 
-	return fmt.Errorf("device %q not found", deviceName)
+	return
 }
 
 func (c *Client) GetDeviceDisplayName() (name string, err error) {

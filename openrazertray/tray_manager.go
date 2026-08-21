@@ -1,22 +1,28 @@
 package openrazertray
 
 import (
-	"github.com/Nok1on1/RazerBatteryTray/openrazer"
+	"context"
 	"log"
 	"time"
+
+	"github.com/Nok1on1/RazerBatteryTray/openrazer"
 
 	"fyne.io/systray"
 )
 
-const batteryLevelUpdateInterval = 5 * time.Second
+const updateInterval = 5 * time.Second
 
 type TrayManager struct {
-	razerClient      *openrazer.Client
-	lastBatteryLevel int8
+	razerClient *openrazer.Client
+	device      *openrazer.Device
+	defaultIcon []byte
+
+	routineCtx  context.Context
+	cancelRoute context.CancelFunc
 }
 
-func NewTrayManager(razerClient *openrazer.Client) *TrayManager {
-	return &TrayManager{razerClient: razerClient, lastBatteryLevel: -1}
+func NewTrayManager(razerClient *openrazer.Client, defaultIcon []byte) *TrayManager {
+	return &TrayManager{razerClient: razerClient, device: &openrazer.Device{}, defaultIcon: defaultIcon}
 }
 
 func (t *TrayManager) Start() {
@@ -26,7 +32,8 @@ func (t *TrayManager) Start() {
 func (t *TrayManager) onReady() {
 	log.Println("onReady: starting tray manager")
 	systray.SetTitle("Razer Battery Tray")
-	go t.listDevicesMenu() // starting menu
+	systray.SetIcon(t.defaultIcon)
+	t.listDevicesMenu() // starting menu
 	log.Println("onReady: tray manager started")
 }
 

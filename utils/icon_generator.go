@@ -12,10 +12,10 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 )
 
-func GenerateIcon(batteryLevel int8) []byte {
+func GenerateIcon(batteryLevel int8, isCharging bool) []byte {
 	const size = 64
 	const outerR = size / 2.0
-	const innerR = outerR - 4.0
+	const innerR = outerR - 5.0
 	const centerX = size / 2.0
 	const centerY = size / 2.0
 
@@ -37,6 +37,15 @@ func GenerateIcon(batteryLevel int8) []byte {
 		activeColor = color.RGBA{R: 255, G: 191, B: 0, A: 255} // Amber/Yellow
 	} else {
 		activeColor = color.RGBA{R: 0, G: 230, B: 0, A: 255} // Razer Green
+	}
+
+	if isCharging {
+		activeColor = color.RGBA{
+			R: 46,
+			G: 196,
+			B: 182,
+			A: 255,
+		}
 	}
 
 	trackColor := color.RGBA{R: 45, G: 45, B: 45, A: 255}
