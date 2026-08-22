@@ -1,7 +1,6 @@
 package openrazertray
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -12,16 +11,12 @@ import (
 )
 
 func (t *TrayManager) deviceMenu() {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.routineCtx = ctx
-	t.cancelRoute = cancel
-
-	systray.ResetMenu()
+	t.NewMenu()
 
 	deviceInfoMenu := t.addDeviceInfoMenuItem()
-	_ = t.backToDevicesMenuItem()
-	go t.batteryLevelChangeRoutine(ctx, deviceInfoMenu)
-
+	t.backToDevicesMenuItem()
+	go t.batteryLevelChangeRoutine(deviceInfoMenu)
+	
 	t.addExitTrayMenu()
 }
 
@@ -29,20 +24,18 @@ func (t *TrayManager) addDeviceInfoMenuItem() *systray.MenuItem {
 	return systray.AddMenuItem(fmt.Sprintf("%s: %d%%", t.device.DeviceName, t.device.LastBatteryLevel), "Show device information")
 }
 
-func (t *TrayManager) backToDevicesMenuItem() *systray.MenuItem {
-	item := systray.AddMenuItem("Back To Devices", "Go back to the devices menu")
-	go t.backToDevicesMenuItemHandler(item)
-	return item
+func (t *TrayManager) backToDevicesMenuItem() (menuItem *systray.MenuItem) {
+	menuItem = systray.AddMenuItem("Back To Devices", "Go back to the devices menu")
+	go func() {
+		for range menuItem.ClickedCh {
+			t.cancelRoute()
+			t.listDevicesMenu()
+		}
+	}()
+	return
 }
 
-func (t *TrayManager) backToDevicesMenuItemHandler(deviceMenuItem *systray.MenuItem) {
-	for range deviceMenuItem.ClickedCh {
-		t.cancelRoute()
-		t.listDevicesMenu()
-	}
-}
-
-func (t *TrayManager) batteryLevelChangeRoutine(ctx context.Context, deviceInfoMenu *systray.MenuItem) {
+func (t *TrayManager) batteryLevelChangeRoutine(deviceInfoMenu *systray.MenuItem) {
 	for {
 		log.Println("batteryLevelChangeRoutine: checking battery level")
 
@@ -76,7 +69,7 @@ func (t *TrayManager) batteryLevelChangeRoutine(ctx context.Context, deviceInfoM
 			log.Printf("batteryLevelChangeRoutine: battery level changed to: %d\n", batteryLevel)
 		}
 		select {
-		case <-ctx.Done():
+		case <-t.routineCtx.Done():
 			return
 		case <-time.After(updateInterval):
 		}

@@ -1,7 +1,6 @@
 package openrazertray
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -10,11 +9,8 @@ import (
 )
 
 func (t *TrayManager) listDevicesMenu() {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.routineCtx = ctx
-	t.cancelRoute = cancel
+	t.NewMenu()
 
-	systray.ResetMenu()
 	systray.SetIcon(t.defaultIcon)
 
 	deviceInfoMenuParent := t.addDeviceInfoParentMenu()
@@ -28,7 +24,6 @@ func (t *TrayManager) addDeviceInfoParentMenu() *systray.MenuItem {
 }
 
 func (t *TrayManager) DeviceInfoMenuRoutine(parent *systray.MenuItem) {
-
 	deviceNames := make(map[string]*systray.MenuItem)
 
 	for {

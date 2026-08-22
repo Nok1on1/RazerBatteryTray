@@ -1,15 +1,26 @@
 package openrazertray
 
-import "fyne.io/systray"
+import (
+	"context"
+
+	"fyne.io/systray"
+)
+
+func (t *TrayManager) NewMenu() {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.routineCtx = ctx
+	t.cancelRoute = cancel
+	systray.ResetMenu()
+}
 
 func (t *TrayManager) addExitTrayMenu() (exitTray *systray.MenuItem) {
 	exitTray = systray.AddMenuItem("Exit Razer Battery Tray", "Exit the tray")
-	go t.exitTrayHandler(exitTray)
-	return
-}
 
-func (t *TrayManager) exitTrayHandler(exitTray *systray.MenuItem) {
-	for range exitTray.ClickedCh {
-		systray.Quit()
-	}
+	go func() {
+		for range exitTray.ClickedCh {
+			systray.Quit()
+		}
+	}()
+
+	return
 }
