@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"reflect"
+	"strings"
 
 	"github.com/Nok1on1/RazerBatteryTray/utils"
 
@@ -35,7 +36,7 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
-func (c *Client) call(method utils.RazerMethod, out any, args ...any) error {
+func (c *Client) Call(method utils.RazerMethod, out any, args ...any) error {
 	obj := c.conn.Object("org.razer", method.Path)
 	call := obj.Call(method.MethodName, 0, args...)
 	if call.Err != nil {
@@ -54,7 +55,7 @@ func (c *Client) call(method utils.RazerMethod, out any, args ...any) error {
 
 func (c *Client) GetDevices() (devices []Device, err error) {
 	var deviceSerials []string
-	err = c.call(c.rootDbus.GetDevices(), &deviceSerials)
+	err = c.Call(c.rootDbus.GetDevices(), &deviceSerials)
 	if err != nil {
 		return
 	}
@@ -65,7 +66,7 @@ func (c *Client) GetDevices() (devices []Device, err error) {
 	}
 
 	for i := range devices {
-		err := c.call(NewDevice(devices[i].DeviceSerial).GetDeviceDisplayName(), &devices[i].DeviceName)
+		err := c.Call(NewDevice(devices[i].DeviceSerial).GetDeviceDisplayName(), &devices[i].DeviceName)
 		if err != nil {
 			log.Println("error getting device display name:", err)
 			continue
@@ -79,17 +80,37 @@ func (c *Client) SetDevice(device Device) {
 	c.DeviceDbus = NewDevice(device.DeviceSerial)
 }
 
+// Here we return wired variant of the same device for --autoConnect flag.
+func (c *Client) IsSameDevice(devices []Device) (Device, bool) {
+	if len(devices) != 2 {
+		log.Fatal("expected 2 devices, got", len(devices))
+	}
+
+	deviceName1, _, _ := strings.Cut(devices[0].DeviceName, "(")
+	deviceName2, _, _ := strings.Cut(devices[1].DeviceName, "(")
+
+	if deviceName1 != deviceName2 {
+		return Device{}, false
+	}
+
+	if strings.Contains(deviceName1, "(Wired)") {
+		return devices[0], true
+	}
+
+	return devices[1], true
+}
+
 func (c *Client) GetDeviceDisplayName() (name string, err error) {
-	err = c.call(c.DeviceDbus.GetDeviceDisplayName(), &name)
+	err = c.Call(c.DeviceDbus.GetDeviceDisplayName(), &name)
 	return
 }
 
 func (c *Client) GetBattery() (level int8, err error) {
-	err = c.call(c.DeviceDbus.GetBattery(), &level)
+	err = c.Call(c.DeviceDbus.GetBattery(), &level)
 	return
 }
 
 func (c *Client) IsCharging() (charging bool, err error) {
-	err = c.call(c.DeviceDbus.IsCharging(), &charging)
+	err = c.Call(c.DeviceDbus.IsCharging(), &charging)
 	return
 }

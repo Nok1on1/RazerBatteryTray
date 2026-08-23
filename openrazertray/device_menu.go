@@ -17,33 +17,40 @@ func (t *TrayManager) deviceMenu(device openrazer.Device) {
 
 	device.LastBatteryLevel = -1
 
-	deviceInfoMenu := t.DeviceInfoMenuItem(device)
+	deviceInfoMenu := t.deviceInfoMenuItem(device)
 	t.backToDevicesMenuItem(&menuCtx)
-	t.ExitTrayMenuItem()
+	t.ExitTrayMenuItem(&menuCtx)
 
-	go t.WatchBatteryRoutine(&menuCtx, &device, deviceInfoMenu)
+	go t.watchBatteryRoutine(&menuCtx, &device, deviceInfoMenu)
+
+	go func() {
+		<-menuCtx.ctx.Done()
+		t.listDevicesMenu()
+	}()
 }
 
-func (t *TrayManager) DeviceInfoMenuItem(device openrazer.Device) *systray.MenuItem {
+func (t *TrayManager) deviceInfoMenuItem(device openrazer.Device) *systray.MenuItem {
 	return systray.AddMenuItem(fmt.Sprintf("%s: %d%%", device.DeviceName, device.LastBatteryLevel), "Show device information")
 }
 
 func (t *TrayManager) backToDevicesMenuItem(menuCtx *MenuContext) (menuItem *systray.MenuItem) {
 	menuItem = systray.AddMenuItem("Back To Devices", "Go back to the devices menu")
 	go func() {
-		for range menuItem.ClickedCh {
+		select {
+		case <-menuCtx.ctx.Done():
+			return
+		case <-menuItem.ClickedCh:
 			menuCtx.cancel()
 			config := utils.GetConfig()
 			if config.AutoConnect {
 				go config.SetOnCooldown()
 			}
-			go t.listDevicesMenu()
 		}
 	}()
 	return
 }
 
-func (t *TrayManager) WatchBatteryRoutine(menuCtx *MenuContext, device *openrazer.Device, deviceInfoMenu *systray.MenuItem) {
+func (t *TrayManager) watchBatteryRoutine(menuCtx *MenuContext, device *openrazer.Device, deviceInfoMenu *systray.MenuItem) {
 	config := utils.GetConfig()
 	for {
 		log.Println("BatteryLevelChangeRoutine: Checking battery level")

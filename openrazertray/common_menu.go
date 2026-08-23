@@ -16,14 +16,17 @@ func CreateContext() MenuContext {
 	return MenuContext{ctx: ctx, cancel: cancel}
 }
 
-func (t *TrayManager) ExitTrayMenuItem() (exitTray *systray.MenuItem) {
-	exitTray = systray.AddMenuItem("Exit Razer Battery Tray", "Exit the tray")
+func (t *TrayManager) ExitTrayMenuItem(menuCtx *MenuContext) *systray.MenuItem {
+	exitTray := systray.AddMenuItem("Exit Razer Battery Tray", "Exit the tray")
 
 	go func() {
-		for range exitTray.ClickedCh {
+		select {
+		case <-menuCtx.ctx.Done():
+			return
+		case <-exitTray.ClickedCh:
 			systray.Quit()
 		}
 	}()
 
-	return
+	return exitTray
 }

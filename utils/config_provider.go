@@ -41,11 +41,10 @@ func (c *Config) SetOnCooldown() {
 func parseArgs() {
 	autoConnectCooldown := 30 * time.Second
 	onCooldown := false
-	config = &Config{UpdateInterval: 5 * time.Second, AutoConnectCooldown: autoConnectCooldown, OnCooldown: &onCooldown}
+	config = &Config{UpdateInterval: 5 * time.Second, AutoConnectCooldown: autoConnectCooldown, OnCooldown: &onCooldown, AutoConnect: true}
 	for i := 1; i < len(os.Args); i++ {
 		switch os.Args[i] {
 		case "--autoConnect":
-			config.AutoConnect = true
 			if i+1 < len(os.Args) && strings.HasPrefix(os.Args[i+1], "--") {
 				config.AutoSelectDevice = os.Args[i+1]
 				i++
@@ -67,7 +66,6 @@ func parseArgs() {
 				if err != nil {
 					log.Fatal("invalid update interval: ", err)
 				}
-				config.AutoConnect = true
 				config.AutoConnectCooldown = time.Duration(sec) * time.Second
 				i++
 			}

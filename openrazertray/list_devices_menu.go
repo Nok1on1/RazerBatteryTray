@@ -15,16 +15,16 @@ func (t *TrayManager) listDevicesMenu() {
 
 	systray.SetIcon(t.defaultIcon)
 	deviceInfoMenuParent := t.addDeviceInfoParentMenu()
-	defer t.ExitTrayMenuItem()
+	defer t.ExitTrayMenuItem(&menuCtx)
 
-	go t.DeviceInfoMenuRoutine(&menuCtx, deviceInfoMenuParent)
+	go t.deviceInfoMenuRoutine(&menuCtx, deviceInfoMenuParent)
 }
 
 func (t *TrayManager) addDeviceInfoParentMenu() *systray.MenuItem {
 	return systray.AddMenuItem("Devices", "List all connected devices")
 }
 
-func (t *TrayManager) DeviceInfoMenuRoutine(menuCtx *MenuContext, parent *systray.MenuItem) {
+func (t *TrayManager) deviceInfoMenuRoutine(menuCtx *MenuContext, parent *systray.MenuItem) {
 	deviceSerials := make(map[string]*systray.MenuItem)
 	config := utils.GetConfig()
 
@@ -35,14 +35,24 @@ func (t *TrayManager) DeviceInfoMenuRoutine(menuCtx *MenuContext, parent *systra
 			return
 		}
 
-		if config.AutoConnect && len(devices) == 1 && !*config.OnCooldown {
-			menuCtx.cancel()
-			t.razerClient.SetDevice(devices[0])
-			go t.deviceMenu(devices[0])
-			return
+		if config.AutoConnect && (len(devices) == 1 || len(devices) == 2) && !*config.OnCooldown {
+			switch len(devices) {
+			case 1:
+				menuCtx.cancel()
+				t.razerClient.SetDevice(devices[0])
+				t.deviceMenu(devices[0])
+				return
+			case 2:
+				if device, ok := t.razerClient.IsSameDevice(devices); ok {
+					menuCtx.cancel()
+					t.razerClient.SetDevice(device)
+					t.deviceMenu(device)
+					return
+				}
+			}
 		}
 
-		currentDevices := make(map[string]struct{})
+		currentDevices := make(map[string]struct{}, len(devices))
 		for _, device := range devices {
 			currentDevices[device.DeviceSerial] = struct{}{}
 			if _, ok := deviceSerials[device.DeviceSerial]; ok {
@@ -70,10 +80,12 @@ func (t *TrayManager) DeviceInfoMenuRoutine(menuCtx *MenuContext, parent *systra
 }
 
 func (t *TrayManager) deviceClickHandler(menuCtx *MenuContext, item *systray.MenuItem, device openrazer.Device) {
-	for range item.ClickedCh {
+	select {
+	case <-menuCtx.ctx.Done():
+		return
+	case <-item.ClickedCh:
 		menuCtx.cancel()
 		t.razerClient.SetDevice(device)
-		go t.deviceMenu(device)
-		break
+		t.deviceMenu(device)
 	}
 }
