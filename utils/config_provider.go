@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -17,7 +18,6 @@ var (
 type Config struct {
 	AutoConnect         bool
 	AutoSelectDevice    string
-	Log                 bool
 	UpdateInterval      time.Duration
 	AutoConnectCooldown time.Duration
 	OnCooldown          *bool
@@ -39,18 +39,19 @@ func (c *Config) SetOnCooldown() {
 }
 
 func parseArgs() {
+	log.SetOutput(io.Discard)
 	autoConnectCooldown := 30 * time.Second
 	onCooldown := false
 	config = &Config{UpdateInterval: 5 * time.Second, AutoConnectCooldown: autoConnectCooldown, OnCooldown: &onCooldown, AutoConnect: true}
 	for i := 1; i < len(os.Args); i++ {
 		switch os.Args[i] {
 		case "--autoConnect":
-			if i+1 < len(os.Args) && strings.HasPrefix(os.Args[i+1], "--") {
+			if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "--") {
 				config.AutoSelectDevice = os.Args[i+1]
 				i++
 			}
 		case "--log":
-			config.Log = true
+			log.SetOutput(os.Stdout)
 		case "--updateInterval":
 			if i+1 < len(os.Args) {
 				sec, err := strconv.ParseInt(os.Args[i+1], 10, 8)
