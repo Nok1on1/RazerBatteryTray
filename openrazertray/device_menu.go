@@ -5,73 +5,80 @@ import (
 	"log"
 	"time"
 
+	"github.com/Nok1on1/RazerBatteryTray/openrazer"
 	"github.com/Nok1on1/RazerBatteryTray/utils"
 
 	"fyne.io/systray"
 )
 
-func (t *TrayManager) deviceMenu() {
-	t.NewMenu()
+func (t *TrayManager) deviceMenu(device openrazer.Device) {
+	systray.ResetMenu()
+	menuCtx := CreateContext()
 
-	deviceInfoMenu := t.addDeviceInfoMenuItem()
-	t.backToDevicesMenuItem()
-	go t.batteryLevelChangeRoutine(deviceInfoMenu)
-	
-	t.addExitTrayMenu()
+	device.LastBatteryLevel = -1
+
+	deviceInfoMenu := t.DeviceInfoMenuItem(device)
+	t.backToDevicesMenuItem(&menuCtx)
+	t.ExitTrayMenuItem()
+
+	go t.WatchBatteryRoutine(&menuCtx, &device, deviceInfoMenu)
 }
 
-func (t *TrayManager) addDeviceInfoMenuItem() *systray.MenuItem {
-	return systray.AddMenuItem(fmt.Sprintf("%s: %d%%", t.device.DeviceName, t.device.LastBatteryLevel), "Show device information")
+func (t *TrayManager) DeviceInfoMenuItem(device openrazer.Device) *systray.MenuItem {
+	return systray.AddMenuItem(fmt.Sprintf("%s: %d%%", device.DeviceName, device.LastBatteryLevel), "Show device information")
 }
 
-func (t *TrayManager) backToDevicesMenuItem() (menuItem *systray.MenuItem) {
+func (t *TrayManager) backToDevicesMenuItem(menuCtx *MenuContext) (menuItem *systray.MenuItem) {
 	menuItem = systray.AddMenuItem("Back To Devices", "Go back to the devices menu")
 	go func() {
 		for range menuItem.ClickedCh {
-			t.cancelRoute()
-			t.listDevicesMenu()
+			menuCtx.cancel()
+			config := utils.GetConfig()
+			if config.AutoConnect {
+				go config.SetOnCooldown()
+			}
+			go t.listDevicesMenu()
 		}
 	}()
 	return
 }
 
-func (t *TrayManager) batteryLevelChangeRoutine(deviceInfoMenu *systray.MenuItem) {
+func (t *TrayManager) WatchBatteryRoutine(menuCtx *MenuContext, device *openrazer.Device, deviceInfoMenu *systray.MenuItem) {
+	config := utils.GetConfig()
 	for {
-		log.Println("batteryLevelChangeRoutine: checking battery level")
+		log.Println("BatteryLevelChangeRoutine: Checking battery level")
 
 		batteryLevel, err := t.razerClient.GetBattery()
 		if err != nil {
-			log.Println("batteryLevelChangeRoutine: error getting battery level:", err)
-			t.listDevicesMenu()
-			break
+			menuCtx.cancel()
+			return
 		}
 		isCharging, err := t.razerClient.IsCharging()
 		if err != nil {
-			log.Println("batteryLevelChangeRoutine: error getting charging state:", err)
-			t.listDevicesMenu()
-			break
+			menuCtx.cancel()
+			return
 		}
 
-		if batteryLevel != t.device.LastBatteryLevel || isCharging != t.device.LastchargingState {
-			if t.device.LastBatteryLevel-batteryLevel > 5 {
-				log.Println("batteryLevelChangeRoutine: battery level changed by more than 5%")
-				t.listDevicesMenu()
-				break
+		if batteryLevel != device.LastBatteryLevel || isCharging != device.LastchargingState {
+			if device.LastBatteryLevel-batteryLevel > 5 {
+				log.Println("BatteryLevelChangeRoutine: Battery level changed by more than 5%%")
+				menuCtx.cancel()
+				return
 			}
 
 			icon := utils.GenerateIcon(batteryLevel, isCharging)
 			systray.SetIcon(icon)
 
-			deviceInfoMenu.SetTitle(fmt.Sprintf("%s: %d%%", t.device.DeviceName, batteryLevel))
-			t.device.LastBatteryLevel = batteryLevel
-			t.device.LastchargingState = isCharging
+			deviceInfoMenu.SetTitle(fmt.Sprintf("%s: %d%%", device.DeviceName, batteryLevel))
+			device.LastBatteryLevel = batteryLevel
+			device.LastchargingState = isCharging
 
-			log.Printf("batteryLevelChangeRoutine: battery level changed to: %d\n", batteryLevel)
+			log.Printf("BatteryLevelChangeRoutine: Battery level changed to: %d\n", batteryLevel)
 		}
 		select {
-		case <-t.routineCtx.Done():
+		case <-menuCtx.ctx.Done():
 			return
-		case <-time.After(updateInterval):
+		case <-time.After(config.UpdateInterval):
 		}
 	}
 }

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"log"
 	"reflect"
-	"slices"
-	"strings"
 
 	"github.com/Nok1on1/RazerBatteryTray/utils"
 
@@ -77,26 +75,8 @@ func (c *Client) GetDevices() (devices []Device, err error) {
 	return
 }
 
-func (c *Client) SelectDevice(deviceName string) (device Device, err error) {
-	devices, err := c.GetDevices()
-	if err != nil {
-		log.Println("error getting devices:", err)
-		return
-	}
-
-	deviceName = strings.ToLower(deviceName)
-	for _, device = range slices.Backward(devices) {
-		if strings.Contains(strings.ToLower(device.DeviceName), deviceName) {
-			log.Println("device found:", device.DeviceName)
-			c.DeviceDbus = NewDevice(device.DeviceSerial)
-			device.LastBatteryLevel = -1
-			return
-		}
-	}
-
-	c.DeviceDbus = NewDevice("")
-
-	return
+func (c *Client) SetDevice(device Device) {
+	c.DeviceDbus = NewDevice(device.DeviceSerial)
 }
 
 func (c *Client) GetDeviceDisplayName() (name string, err error) {

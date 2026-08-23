@@ -1,67 +1,79 @@
 package openrazertray
 
 import (
-	"fmt"
 	"log"
 	"time"
 
 	"fyne.io/systray"
+	"github.com/Nok1on1/RazerBatteryTray/openrazer"
+	"github.com/Nok1on1/RazerBatteryTray/utils"
 )
 
 func (t *TrayManager) listDevicesMenu() {
-	t.NewMenu()
+	systray.ResetMenu()
+	menuCtx := CreateContext()
 
 	systray.SetIcon(t.defaultIcon)
-
 	deviceInfoMenuParent := t.addDeviceInfoParentMenu()
-	go t.DeviceInfoMenuRoutine(deviceInfoMenuParent)
+	defer t.ExitTrayMenuItem()
 
-	t.addExitTrayMenu()
+	go t.DeviceInfoMenuRoutine(&menuCtx, deviceInfoMenuParent)
 }
 
 func (t *TrayManager) addDeviceInfoParentMenu() *systray.MenuItem {
 	return systray.AddMenuItem("Devices", "List all connected devices")
 }
 
-func (t *TrayManager) DeviceInfoMenuRoutine(parent *systray.MenuItem) {
-	deviceNames := make(map[string]*systray.MenuItem)
+func (t *TrayManager) DeviceInfoMenuRoutine(menuCtx *MenuContext, parent *systray.MenuItem) {
+	deviceSerials := make(map[string]*systray.MenuItem)
+	config := utils.GetConfig()
 
 	for {
 		devices, err := t.razerClient.GetDevices()
 		if err != nil {
-			log.Println("listDevices: error getting devices:", err)
+			log.Fatal("DeviceInfoMenuRoutine: Error getting devices:", err)
 			return
 		}
 
+		if config.AutoConnect && len(devices) == 1 && !*config.OnCooldown {
+			menuCtx.cancel()
+			t.razerClient.SetDevice(devices[0])
+			go t.deviceMenu(devices[0])
+			return
+		}
+
+		currentDevices := make(map[string]struct{})
 		for _, device := range devices {
-			if _, ok := deviceNames[device.DeviceName]; ok {
+			currentDevices[device.DeviceSerial] = struct{}{}
+			if _, ok := deviceSerials[device.DeviceSerial]; ok {
 				continue
 			}
 			item := parent.AddSubMenuItem(device.DeviceName, "View battery level for "+device.DeviceName)
-			deviceNames[device.DeviceName] = item
-			go t.deviceClickHandler(item, device.DeviceName)
+			deviceSerials[device.DeviceSerial] = item
+			go t.deviceClickHandler(menuCtx, item, device)
 		}
+
+		for serial := range deviceSerials {
+			if _, ok := currentDevices[serial]; !ok {
+				log.Printf("DeviceInfoRoutine: Device %s is no longer connected\n", serial)
+				deviceSerials[serial].Remove()
+				delete(deviceSerials, serial)
+			}
+		}
+
 		select {
-		case <-t.routineCtx.Done():
+		case <-menuCtx.ctx.Done():
 			return
-		case <-time.After(updateInterval):
+		case <-time.After(config.UpdateInterval):
 		}
 	}
 }
 
-func (t *TrayManager) deviceClickHandler(item *systray.MenuItem, device string) {
+func (t *TrayManager) deviceClickHandler(menuCtx *MenuContext, item *systray.MenuItem, device openrazer.Device) {
 	for range item.ClickedCh {
-		t.cancelRoute()
-
-		device, err := t.razerClient.SelectDevice(device)
-		if err != nil {
-			log.Println("deviceClickHandler: error selecting device:", err)
-			continue
-		}
-		t.device = &device
-
-		systray.SetTitle(fmt.Sprintf("%s's Battery Tray", device.DeviceName))
-		t.deviceMenu()
+		menuCtx.cancel()
+		t.razerClient.SetDevice(device)
+		go t.deviceMenu(device)
 		break
 	}
 }
